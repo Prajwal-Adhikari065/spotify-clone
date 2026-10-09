@@ -1,7 +1,9 @@
 import client from "../db/db.js";
+import jwt from "jsonwebtoken";
+import bcrypt, { hash } from "bcrypt";
 
 async function registerUser(req, res) {
-    const { username, password, email } = req.body;
+    const { username, email, password, role } = req.body;
     
     const existingUser = await client.query(
         'SELECT * FROM users WHERE email = $1',
@@ -13,18 +15,34 @@ async function registerUser(req, res) {
         });
     }
 
+     const hashedPassword = await bcrypt.hash(password, 10);
+
     const result = await client.query(
-    `INSERT INTO users (name, email, password)
-     VALUES ($1, $2, $3)
-     RETURNING id, name, email, created_at`,
-    [username, email, password]
+    `INSERT INTO users (username, email, password, role)
+     VALUES ($1, $2, $3, $4)
+     RETURNING id, username, email, role, created_at`,
+    [username, email, hashedPassword, role]
 );
 
     const user = result.rows[0];
 
+  const token = jwt.sign(
+    { id: user.id, 
+        role: user.role 
+    },
+     process.env.JWT_SECRET
+      );
+res.cookie('token', token);
+
     res.status(201).json({
         message: 'User registered successfully',
-        user
+        user:{
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            role: user.role,
+            created_at: user.created_at
+        }
     });
 }
 
@@ -38,9 +56,10 @@ function welcome(req, res) {
 function loginUser(req, res) {
     const { email, password } = req.body;
 
+    const hashedPassword = bcrypt.hashSync(password, 10);
     client.query(
         'SELECT * FROM users WHERE email = $1 AND password = $2',
-        [email, password],
+        [email, hashedPassword],
         (err, result) => {
             if (err) {
                 console.error('Error executing query', err.stack);
@@ -60,24 +79,5 @@ function loginUser(req, res) {
     );
 }
 
-function registerUser(req, res) {
-    const { username, password, email } = req.body;
 
-    client.query(
-        'INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id, name, email, created_at',
-        [username, email, password],
-        (err, result) => {
-            if (err) {
-                console.error('Error executing query', err.stack);
-                return res.status(500).json({ message: 'Internal server error' });
-            }
-
-            const user = result.rows[0];
-            res.status(201).json({
-                message: 'User registered successfully',
-                user
-            });
-        }
-    );
-}
 export { registerUser,welcome,loginUser };
