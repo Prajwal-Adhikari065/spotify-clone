@@ -1,12 +1,17 @@
-import ImageKit from '@imagekit/nodejs';
+import ImageKit from "@imagekit/nodejs";
 
 const client = new ImageKit({
-  privateKey: process.env.IMAGEKIT_PRIVATE_KEY, 
+  privateKey: process.env.IMAGEKIT_PRIVATE_KEY,
 });
 
-const response = await client.files.upload({
-  file: fs.createReadStream('path/to/file'),
-  fileName: 'file-name.jpg',
-});
+async function uploadFile(file) {
+  const result = await ImageKitClient.files.upload({
+    file,
+    fileName: "music_" + Date.now(),
+    folder: "Project Spotify/music",
+  });
 
-console.log(response);
+  return result;
+}
+
+export { uploadFile };
