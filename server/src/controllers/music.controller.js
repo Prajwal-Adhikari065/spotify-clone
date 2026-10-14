@@ -8,8 +8,9 @@ async function createMusic(req, res) {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
+  let decoded; 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     if (decoded.role !== "artist") {
       return res
@@ -23,24 +24,27 @@ async function createMusic(req, res) {
   const { title } = req.body;
   const file = req.file;
 
-  const result = await uploadFile(file.buffer.tostring("base64"));
-
-  const music = {
-    title,
-    fileUrl: result.url,
-    artistId: decoded.id,
-  };
-
-  const query = "INSERT INTO music (title, fileUrl, artistId) VALUES (?, ?, ?)";
-  const values = [music.title, music.fileUrl, music.artistId];
+  
+  if (!file) {
+    return res.status(400).json({ message: "No file uploaded" });
+  }
 
   try {
-    await client.execute(query, values);
+    const result = await uploadFile(file.buffer); 
+
+    const music = { 
+      title,
+      fileUrl: result.url,
+      artistId: decoded.id, 
+    };
+
+ const query = "INSERT INTO music (title, fileUrl, artistId) VALUES ($1, $2, $3)";
+    const values = [music.title, music.fileUrl, music.artistId];
+
+    await client.query(query, values); // Changed from client.execute to client.query
     res.status(201).json({ message: "Music created successfully" });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Internal server error" });
-  }
+    return res.status(500).json({ message: "Failed to create music" });
 }
-
+}
 export { createMusic };

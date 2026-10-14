@@ -4,7 +4,7 @@ import bcrypt from "bcrypt";
 
 async function registerUser(req, res) {
     try {
-        const { username, email, password } = req.body;
+        const { username, email, password, role } = req.body;
 
         if (!username || !email || !password) {
             return res.status(400).json({ message: 'Username, email, and password are required' });
@@ -25,11 +25,14 @@ async function registerUser(req, res) {
 
         const hashedPassword = await bcrypt.hash(password, 10);
 
+        const userRole = role || 'user';
+
         const result = await client.query(
             `INSERT INTO users (username, email, password, role)
-             VALUES ($1, $2, $3, $4)
+             VALUES ($1, $2, $3, COALESCE($4, 'user'))
              RETURNING id, username, email, role, created_at`,
-            [username, email, hashedPassword, 'user']);
+            [username, email, hashedPassword, role || null]
+        );
 
         const user = result.rows[0];
 
@@ -75,7 +78,7 @@ async function loginUser(req, res) {
             return res.status(401).json({ message: 'Invalid credentials' });
         }
 
-        const user = result.rows[0];
+        const user = result.rows[0]; // Removed the stray empty block {}
 
         const isPasswordValid = await bcrypt.compare(password, user.password);
         if (!isPasswordValid) {
