@@ -4,15 +4,22 @@ import bcrypt from "bcrypt";
 
 async function registerUser(req, res) {
     try {
-        const { username, email, password, role } = req.body;
-        
+        const { username, email, password } = req.body;
+
+        if (!username || !email || !password) {
+            return res.status(400).json({ message: 'Username, email, and password are required' });
+        }
+
         const existingUser = await client.query(
-            'SELECT id FROM users WHERE email = $1',
-            [email]
-        );  
+            'SELECT id, username, email FROM users WHERE email = $1 OR username = $2',
+            [email, username]
+        );
+
         if (existingUser.rows.length > 0) {
+            const match = existingUser.rows[0];
+            const field = match.email === email ? 'Email' : 'Username';
             return res.status(400).json({
-                message: 'User already exists'
+                message: `${field} is already taken`
             });
         }
 
@@ -22,8 +29,7 @@ async function registerUser(req, res) {
             `INSERT INTO users (username, email, password, role)
              VALUES ($1, $2, $3, $4)
              RETURNING id, username, email, role, created_at`,
-            [username, email, hashedPassword, role]
-        );
+            [username, email, hashedPassword, 'user']);
 
         const user = result.rows[0];
 
@@ -47,33 +53,39 @@ async function registerUser(req, res) {
 
 function welcome(req, res) {
     res.status(200).json({
-         message: 'Welcome to the API' 
+        message: 'Welcome to the API'
     });
-}   
+}
 
 async function loginUser(req, res) {
     try {
-        const { email, password } = req.body;
+        const identifier = req.body.email || req.body.username;
+        const { password } = req.body;
+
+        if (!identifier || !password) {
+            return res.status(400).json({ message: 'Username/email and password are required' });
+        }
 
         const result = await client.query(
-            'SELECT * FROM users WHERE email = $1',
-            [email]
+            'SELECT * FROM users WHERE email = $1 OR username = $1',
+            [identifier]
         );
 
         if (result.rows.length === 0) {
-            return res.status(401).json({ message: 'Invalid email or password' });
+            return res.status(401).json({ message: 'Invalid credentials' });
         }
 
         const user = result.rows[0];
-        
+
         const isPasswordValid = await bcrypt.compare(password, user.password);
         if (!isPasswordValid) {
-            return res.status(401).json({ message: 'Invalid email or password' });
+            return res.status(401).json({ message: 'Invalid credentials' });
         }
 
         const token = jwt.sign(
             { id: user.id, role: user.role },
-            process.env.JWT_SECRET
+            process.env.JWT_SECRET,
+            { expiresIn: '1d' }
         );
 
         res.cookie('token', token, { httpOnly: true, secure: true, sameSite: 'strict' });
